@@ -1,0 +1,4 @@
+requests
+requests_toolbelt
+IPython
+lxml
