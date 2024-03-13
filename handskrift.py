@@ -1,3 +1,4 @@
+# %%
 import json
 import random
 import time
@@ -12,7 +13,10 @@ from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 def iiif_manifest(urn):
     r = requests.get("https://api.nb.no/catalog/v1/iiif/{urn}/manifest".format(urn=urn))
-    return r.json()
+    content = r.json()
+    if content.get("status") == "NOT_FOUND":
+        print("-- Fant ikke IIIF-manifestet for ", urn)
+    return content
 
 
 def get_pages(manifest):
@@ -34,33 +38,47 @@ def download_pages(pages, wait=1):
             r = requests.get(page, stream=True)
             pageDict[filename] = r.content
             time.sleep(wait)
-        except:
+            r.raise_for_status()
+        except requests.exceptions.RequestException:
             continue
     return pageDict
 
 
+def number_of_pages_total(response):
+    """Check how many pages were uploaded from the request response"""
+    number = response.xpath("//nrOfPagesTotal/text()")[0]
+    return int(number)
+
+
+# %%
 def lastopp_transkribus(collId="", s=None, sesamids=None):
     """last opp dokumenter fra nb.no til en collection i transkribus"""
 
-    if s == None:
+    if s is None:
         print("Har du glemt å logge inn?")
         return
 
+    # Samle opp sesamid for brev som ikke blir lastet opp
     skipped = []
     for sesamid in sesamids:
-        fail = False
+        # fail = False
         print("Sesamid", sesamid)
+        # Hent bilder fra Nettbiblioteket
         manifest = iiif_manifest(sesamid)
         pages = get_pages(manifest)
         files = download_pages(pages)
 
+        if len(files) == 0 or len(pages) == 0:
+            print("-- Found no image files or pages for sesamid, skipping", sesamid)
+            skipped.append(sesamid)
+            continue
+
+        # Last opp metadata for filene til Transkribus
         pages_metadata = [
             {"fileName": val, "pageNr": idx + 1}
             for idx, val in enumerate(sorted(files))
         ]
-
         uploadObj = {"md": {"title": sesamid}, "pageList": {"pages": pages_metadata}}
-
         headers = {"Content-type": "application/json"}
         try:
             cont = s.post(
@@ -68,18 +86,23 @@ def lastopp_transkribus(collId="", s=None, sesamids=None):
                 json=uploadObj,
                 headers=headers,
             )
-            # parse and get upload ID
+            # parse response xml and get upload ID
             response = etree.fromstring(cont.content)
             uploadId = response.xpath("//uploadId/text()")[0]
-            print("- successfully uploaded metadata, got id", uploadId)
+            if number_of_pages_total(response) > 0:
+                print("- uploaded metadata with uploadId", uploadId)
+            else:
+                print("-- No pages uploaded, skipping", sesamid)
+                skipped.append(sesamid)
+                continue
         except:
             print("-- failed to get upload ID, skipping", sesamid)
             skipped.append(sesamid)
             continue
 
-        # loop through files
+        # Upload image file for each page to Transkribus
         for key in sorted(files):
-            print(key)
+            #print(key)
 
             mp_encoder = MultipartEncoder(
                 fields={"img": (key, files[key], "application/octet-stream")}
@@ -91,23 +114,23 @@ def lastopp_transkribus(collId="", s=None, sesamids=None):
                     data=mp_encoder,
                     headers={"Content-Type": mp_encoder.content_type},
                 )
-            except:
-                print("-- failed to upload", key)
-                fail = True
-                break
-            time.sleep(random.randint(0, 2))
-        if fail == False:
-            print("- done!")
-        else:
-            skipped.append(sesamid)
-            print("-- failed to upload file in ", sesamid, "skipping this sesamid")
+                cont.raise_for_status()
+            except requests.exceptions.RequestException:
+                print("-- failed to upload", key, "skipping this sesamid")
+                print("  ", cont.text)
+                skipped.append(sesamid)
+                break  # skip to next sesamid
+            time.sleep(random.randint(0, 2))  # Wait for the server before next upload
+            print("- done uploading file", key)
+        # skipped.append(sesamid)
+        # print("-- failed to upload file in ", sesamid, "skipping this sesamid")
     print("Skipped sesamids:", skipped)
 
 
 def la_transkribus(collId="", docIds=[], s=None):
     """Layoutanalyse for dokumenter i en collection"""
 
-    if s == None:
+    if s is None:
         print("Har du glemt å logge inn?")
         return
 
@@ -135,7 +158,7 @@ def la_transkribus(collId="", docIds=[], s=None):
 def htr_transkribus(collId="", modelId="", docIds=[], s=None):
     """HTR+ tekstgjenkjenning for dokumenter i en collection med gitt modell"""
 
-    if s == None:
+    if s is None:
         print("Har du glemt å logge inn?")
         return
 
@@ -167,7 +190,7 @@ def htr_transkribus(collId="", modelId="", docIds=[], s=None):
 def pylaia_transkribus(collId="", modelId="", s=None, docids=None):
     """pylaia tekstgjenkjenning for dokumenter i en collection med gitt modell"""
 
-    if s == None:
+    if s is None:
         print("Har du glemt å logge inn?")
         return
 
@@ -275,3 +298,44 @@ def save_sesamids(sesamids, filename="sesamids.json"):
                 file.write(key + "\n")
             except:
                 pass
+
+
+def did_pages_upload(response):
+    pageUploaded = response.xpath("//pageList/pages/pageUploaded")
+    return [eval(status.text.title()) for status in pageUploaded]
+
+
+def get_jobs(session):
+    jobs = "https://transkribus.eu/TrpServer/rest/jobs/list"
+    jobslist = session.get(jobs).json()
+    return jobslist
+
+
+def get_jobid_for_sesamid(jobslist, sesamid):
+    for job in jobslist:
+        if job["docTitle"] == sesamid:
+            return job["jobId"]
+
+
+def is_success(jobid, session):
+    jobstatus = f"https://transkribus.eu/TrpServer/rest/jobs/{jobid}"
+    status = session.get(jobstatus).json()
+    return status.get("success")
+
+
+def check_status(sesamids):
+    skipped = []
+    jobslist = get_jobs()
+    for sesamid in sesamids:
+        jobid = get_jobid_for_sesamid(jobslist, sesamid)
+        if jobid:
+            success = is_success(jobid)
+            if success:
+                print(f"{sesamid} har jobId {jobid} og ble lastet opp: {success}")
+            if not success:
+                print(f"-- Hoppet over {sesamid}")
+                skipped.append(sesamid)
+        else:
+            print(f"Ingen jobb funnet for {sesamid}")
+            skipped.append(sesamid)
+    return skipped
