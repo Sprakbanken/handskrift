@@ -339,3 +339,25 @@ def check_status(sesamids):
             print(f"Ingen jobb funnet for {sesamid}")
             skipped.append(sesamid)
     return skipped
+
+
+if __name__ == "__main__":
+    
+    import argparse 
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description="Last opp bilder fra Nettbiblioteket til Transkribus")
+    parser.add_argument("-c", "--collection", help="Collection ID i Transkribus", required=True)
+    parser.add_argument("-u", "--username", help="Brukernavn i Transkribus", required=True)
+    parser.add_argument("-p", "--password", help="Passord i Transkribus", required=True)
+    parser.add_argument("-i", "--sesamids", type=Path, help="Fil med sesamids som skal lastes opp. Én ID per linje", required=True)
+
+    args = parser.parse_args()
+
+    session = requests.Session()
+    login_response = session.post('https://transkribus.eu/TrpServer/rest/auth/login', data={"user": args.username, "pw":args.password})
+
+    print("Du er logget inn!" if login_response.ok else "OBS! Sjekk påloggingsinfoen og prøv igjen.")
+    
+    sesamids = args.sesamids.read_text().splitlines()
+    lastopp_transkribus(collId=args.collection, s=session, sesamids=sesamids)
