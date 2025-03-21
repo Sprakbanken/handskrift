@@ -99,7 +99,6 @@ def lastopp_transkribus(collId="", s=None, sesamids=None):
 
         # Upload image file for each page to Transkribus
         for key in sorted(files):
-
             mp_encoder = MultipartEncoder(
                 fields={"img": (key, files[key], "application/octet-stream")}
             )
@@ -345,11 +344,15 @@ def get_collection_id(collection_name: str, session: requests.Session) -> str:
             print(f"Collection ID for {collection_name}: {coll_id}")
             return coll_id
     print(f"Collection {collection_name} not found.")
-    
 
-def get_sesamids_from_transkribus_collection(collection_id: str, session: requests.Session) -> list:
+
+def get_sesamids_from_transkribus_collection(
+    collection_id: str, session: requests.Session
+) -> list:
     """Fetch sesamids from a Transkribus collection."""
-    response = session.get(f"https://transkribus.eu/TrpServer/rest/collections/{collection_id}/list")
+    response = session.get(
+        f"https://transkribus.eu/TrpServer/rest/collections/{collection_id}/list"
+    )
     collection_docs = response.json()
     sesamids = [doc["title"] for doc in collection_docs]
     return sesamids
