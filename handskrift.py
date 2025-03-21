@@ -1,14 +1,12 @@
-# %%
+"""Hjelpefunksjoner for arbeid med håndskriftsgjenkjenning av bilder fra nb.no i Transkribus"""
+
 import json
 import random
 import time
 
 import requests
-from IPython.core.display import HTML
 from lxml import etree
 from requests_toolbelt.multipart.encoder import MultipartEncoder
-
-### funksjoner for arbeid med håndskrifter fra nb.no i Transkribus
 
 
 def iiif_manifest(urn):
@@ -50,7 +48,6 @@ def number_of_pages_total(response):
     return int(number)
 
 
-# %%
 def lastopp_transkribus(collId="", s=None, sesamids=None):
     """last opp dokumenter fra nb.no til en collection i transkribus"""
 
@@ -95,14 +92,13 @@ def lastopp_transkribus(collId="", s=None, sesamids=None):
                 print("-- No pages uploaded, skipping", sesamid)
                 skipped.append(sesamid)
                 continue
-        except:
+        except requests.exceptions.RequestException:
             print("-- failed to get upload ID, skipping", sesamid)
             skipped.append(sesamid)
             continue
 
         # Upload image file for each page to Transkribus
         for key in sorted(files):
-            #print(key)
 
             mp_encoder = MultipartEncoder(
                 fields={"img": (key, files[key], "application/octet-stream")}
@@ -145,12 +141,12 @@ def la_transkribus(collId="", docIds=[], s=None):
 
         try:
             print("- triggering LA for docId ", docId)
-            cont = s.post(
+            s.post(
                 "https://transkribus.eu/TrpServer/rest/LA?collId=" + collId,
                 json=LAObj,
                 headers={"Content-type": "application/json"},
             )
-        except:
+        except requests.exceptions.RequestException:
             print("-- failed to trigger LA for docId ", docId)
             continue
 
@@ -173,7 +169,7 @@ def htr_transkribus(collId="", modelId="", docIds=[], s=None):
 
         try:
             print("- triggering HTR for docId ", docId)
-            htr = s.post(
+            s.post(
                 "https://transkribus.eu/TrpServer/rest/recognition/"
                 + collId
                 + "/"
@@ -182,7 +178,7 @@ def htr_transkribus(collId="", modelId="", docIds=[], s=None):
                 json=htrObj,
                 headers={"Content-type": "application/json"},
             )
-        except:
+        except requests.exceptions.RequestException:
             print("-- failed to trigger HTR for docId ", docId)
             continue
 
@@ -207,7 +203,7 @@ def pylaia_transkribus(collId="", modelId="", s=None, docids=None):
 
         try:
             print("- triggering Pylaia for docId ", docId)
-            htr = s.post(
+            s.post(
                 "https://transkribus.eu/TrpServer/rest/pylaia/"
                 + collId
                 + "/"
@@ -216,7 +212,7 @@ def pylaia_transkribus(collId="", modelId="", s=None, docids=None):
                 json=PylaiaObj,
                 headers={"Content-type": "application/json"},
             )
-        except:
+        except requests.exceptions.RequestException:
             print("-- failed to trigger Pylaia for docId ", docId)
             continue
 
@@ -271,10 +267,10 @@ def run_query(query):
         "bolker",
     )
 
-    while next_page == True:
+    while next_page:
         try:
             link = obj["_links"]["next"]["href"]
-        except:
+        except KeyError:
             next_page = False
             continue
 
@@ -294,10 +290,7 @@ def run_query(query):
 def save_sesamids(sesamids, filename="sesamids.json"):
     with open(filename, "w") as file:
         for key in sesamids:
-            try:
-                file.write(key + "\n")
-            except:
-                pass
+            file.write(key + "\n")
 
 
 def did_pages_upload(response):
@@ -342,22 +335,41 @@ def check_status(sesamids):
 
 
 if __name__ == "__main__":
-    
-    import argparse 
+    import argparse
+    import sys
     from pathlib import Path
 
-    parser = argparse.ArgumentParser(description="Last opp bilder fra Nettbiblioteket til Transkribus")
-    parser.add_argument("-c", "--collection", help="Collection ID i Transkribus", required=True)
-    parser.add_argument("-u", "--username", help="Brukernavn i Transkribus", required=True)
+    parser = argparse.ArgumentParser(
+        description="Last opp bilder fra Nettbiblioteket til Transkribus"
+    )
+    parser.add_argument(
+        "-c", "--collection", help="Collection ID i Transkribus", required=True
+    )
+    parser.add_argument(
+        "-u", "--username", help="Brukernavn i Transkribus", required=True
+    )
     parser.add_argument("-p", "--password", help="Passord i Transkribus", required=True)
-    parser.add_argument("-i", "--sesamids", type=Path, help="Fil med sesamids som skal lastes opp. Én ID per linje", required=True)
+    parser.add_argument(
+        "-i",
+        "--sesamids",
+        type=Path,
+        help="Fil med sesamids som skal lastes opp. Én ID per linje",
+        required=True,
+    )
 
     args = parser.parse_args()
 
     session = requests.Session()
-    login_response = session.post('https://transkribus.eu/TrpServer/rest/auth/login', data={"user": args.username, "pw":args.password})
+    login_response = session.post(
+        "https://transkribus.eu/TrpServer/rest/auth/login",
+        data={"user": args.username, "pw": args.password},
+    )
 
-    print("Du er logget inn!" if login_response.ok else "OBS! Sjekk påloggingsinfoen og prøv igjen.")
-    
+    if login_response.ok:
+        print("Du er logget inn!")
+    else:
+        print("OBS! Kunne ikke logge inn. Sjekk påloggingsinfoen og prøv igjen.")
+        sys.exit(0)
+
     sesamids = args.sesamids.read_text().splitlines()
     lastopp_transkribus(collId=args.collection, s=session, sesamids=sesamids)
