@@ -334,6 +334,33 @@ def check_status(sesamids):
     return skipped
 
 
+def get_collection_id(collection_name: str, session: requests.Session) -> str:
+    """Get the Transkribus collection ID for a given collection name"""
+    response = session.get("https://transkribus.eu/TrpServer/rest/collections")
+    collections = response.json()
+
+    for col in collections["trpCollection"]:
+        if col.get("colName") == collection_name:
+            coll_id = col.get("colId")
+            print(f"Collection ID for {collection_name}: {coll_id}")
+            return coll_id
+    print(f"Collection {collection_name} not found.")
+    
+
+def get_sesamids_from_transkribus_collection(collection_id: str, session: requests.Session) -> list:
+    """Fetch sesamids from a Transkribus collection."""
+    response = session.get(f"https://transkribus.eu/TrpServer/rest/collections/{collection_id}/list")
+    collection_docs = response.json()
+    sesamids = [doc["title"] for doc in collection_docs]
+    return sesamids
+
+
+def filter_sesamids(library_ids: list[str], transkribus_ids: list[str]) -> list[str]:
+    """Extract IDs of the digitized documents that are in the library but not in Transkribus."""
+    new_docs = list(set(library_ids).difference(set(transkribus_ids)))
+    return new_docs
+
+
 if __name__ == "__main__":
     import argparse
     import sys
