@@ -19,12 +19,14 @@ pip install -U -r requirements.txt
 
 Hent bilder av digitaliserte dokumenter fra Nettbiblioteket og last dem opp til Transkribus for å gjenkjenne teksten i bildene.
 
-Hvis du har opptil 10 dokumenter som skal transkriberes, kan du bruke notebooken [`DHLAB_Transkribus.ipynb`](./DHLAB_Transkribus.ipynb) for å logge på Transkribus og laste opp dokumentene til en av dine dokumentsamlinger (`collections`).
+Hvis du kun har noen få dokumenter som skal transkriberes, kan du bruke notebooken [`DHLAB_Transkribus.ipynb`](./DHLAB_Transkribus.ipynb) for å logge på Transkribus og laste opp dokumentene til en av dine dokumentsamlinger (`collections`).
 
-Hvis du har mange dokumenter anbefaler vi at du bruker bare henter ut dokument-ID-ene fra Nettbiblioteket me notebooken og heller kjører skriptet [`handskrift.py`](./handskrift.py) i terminalen for å laste dem opp til Transkribus.
+Hvis det er flere enn 10 dokumenter som skal lastes opp, anbefaler vi å bare hente ut dokument-ID-ene fra Nettbiblioteket med notebooken og heller laste dem opp ved å kjøre skriptet [`handskrift.py`](./handskrift.py) i terminalen i en skjerm-uavhengig økt (med `screen`, `tmux` eller lignende).
 
 > **OBS:** Husk å fylle inn riktig påloggingsinformasjon for Transkribus:
 
 ```shell
+screen
+source .venv/bin/activate
 python -m  handskrift -c $COLLECTION_ID -u $USERNAME -p $PASSWORD -i $DOCUMENT_ID_FILE
 ```

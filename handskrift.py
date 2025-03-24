@@ -273,13 +273,14 @@ def run_query(query):
             next_page = False
             continue
 
-        print(counter)
+        print(".", end="")
         counter += 1
         r = requests.get(link)
         obj = r.json()
         items = get_items_metadata(obj)
         itemDict.update(items)
         time.sleep(0)
+    print("Ferdig")
     sesamids = []
     for key in itemDict:
         sesamids.append(key)
