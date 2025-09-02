@@ -1,0 +1,25 @@
+
+[project]
+name="handskrift"
+dependencies = [
+    "requests",
+    "requests-toolbelt",
+    "IPython",
+    "lxml",
+]
+requires-python = ">=3.12"
+version = "0.1.0"
+description = "Kode for å hente data fra Nettbiblioteket og laste opp til Transkribus"
+authors = [
+    {name = "Språkbanken", email = "sprakbanken@nb.no"},
+]
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = false
